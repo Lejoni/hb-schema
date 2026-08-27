@@ -1,0 +1,31 @@
+# ==============================================================================
+# Högskolan i Borås (HB) - Schema TUI Konfiguration
+# ==============================================================================
+# Denna fil kan antingen placeras lokalt i projektmappen (./config.toml)
+# eller i din standardkonfigurationsmapp (~/.config/hb-schema/config.toml).
+
+# Standardprofil som laddas automatiskt vid start
+default_profile = "tekniskt_basar"
+
+# Hur många minuter schemat cachas lokalt innan det hämtas på nytt
+cache_ttl_minutes = 180
+
+# Tema för användargränssnittet ("modern")
+theme = "modern"
+
+# ==============================================================================
+# Schemaprofiler
+# ==============================================================================
+# Du kan lägga till hur många scheman du vill. Tryck 's' i TUI:t för att växla!
+
+[profiles.tekniskt_basar]
+name = "Tekniskt Basår (KBAST26h)"
+url = "https://schema.hb.se/setup/jsp/Schema.jsp?startDatum=2026-08-31&intervallTyp=a&intervallAntal=1&sprak=SV&sokMedAND=true&forklaringar=true&resurser=p.KBAST26h"
+group_filter = "alla"
+description = "Högskolan i Borås - Tekniskt basår HT26/VT27"
+
+[profiles.dataing]
+name = "Högskoleingenjör Datateknik (TGITI26h)"
+url = "https://schema.hb.se/setup/jsp/Schema.jsp?startDatum=2026-08-31&intervallTyp=a&intervallAntal=1&sprak=SV&sokMedAND=true&forklaringar=true&resurser=p.TGITI26h"
+group_filter = "alla"
+description = "Högskolan i Borås - Datateknik HT26/VT27"
