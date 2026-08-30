@@ -1,6 +1,7 @@
 # 📅 Högskolan i Borås (HB) - Schema TUI
 
 Ett modernt, snabbt och lättnavigerat terminalbaserat gränssnitt (TUI) skrivet i **Rust** för att visa, söka i och navigera scheman från Högskolan i Borås ([schema.hb.se / KronoX](https://schema.hb.se)).
+hb-schema är skrivet med hjälp av AI.
 
 ---
 
