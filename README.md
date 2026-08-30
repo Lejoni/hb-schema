@@ -1,5 +1,7 @@
 # 📅 Högskolan i Borås (HB) - Schema TUI
 
+ENGLISH: This application and documentation is in Swedish, as it's only intended use is for a school in Sweden.
+
 Ett modernt, snabbt och lättnavigerat terminalbaserat gränssnitt (TUI) skrivet i **Rust** för att visa, söka i och navigera scheman från Högskolan i Borås ([schema.hb.se / KronoX](https://schema.hb.se)).
 hb-schema är skrivet med hjälp av AI.
 
