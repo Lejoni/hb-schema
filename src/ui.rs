@@ -7,7 +7,7 @@ use ratatui::{
     text::{Line, Span},
     widgets::{
         Block, BorderType, Borders, Clear, List, ListItem, Paragraph, Row, Table,
-        Tabs, Wrap,
+        TableState, Tabs, Wrap,
     },
     Frame,
 };
@@ -296,7 +296,9 @@ fn render_week_view(f: &mut Frame, app: &mut App, area: Rect) {
     .block(list_block)
     .highlight_symbol("▶ ");
 
-    f.render_widget(table, main_chunks[0]);
+    let mut table_state = TableState::default();
+    table_state.select(Some(app.selected_event_index));
+    f.render_stateful_widget(table, main_chunks[0], &mut table_state);
 
     let selected_event = events.get(app.selected_event_index).copied();
     render_event_inspector(f, selected_event, main_chunks[1]);
@@ -385,7 +387,9 @@ fn render_timeline_view(f: &mut Frame, app: &mut App, area: Rect) {
     .block(list_block)
     .highlight_symbol("▶ ");
 
-    f.render_widget(table, main_chunks[0]);
+    let mut table_state = TableState::default();
+    table_state.select(Some(app.selected_event_index));
+    f.render_stateful_widget(table, main_chunks[0], &mut table_state);
 
     let selected_event = events.get(app.selected_event_index).copied();
     render_event_inspector(f, selected_event, main_chunks[1]);
@@ -474,7 +478,9 @@ fn render_day_view(f: &mut Frame, app: &mut App, area: Rect) {
     .block(list_block)
     .highlight_symbol("▶ ");
 
-    f.render_widget(table, main_chunks[0]);
+    let mut table_state = TableState::default();
+    table_state.select(Some(app.selected_event_index));
+    f.render_stateful_widget(table, main_chunks[0], &mut table_state);
 
     let selected_event = events.get(app.selected_event_index).copied();
     render_event_inspector(f, selected_event, main_chunks[1]);

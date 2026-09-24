@@ -200,31 +200,117 @@ impl App {
 
     pub fn jump_to_current_week(&mut self) {
         let current_w = Self::get_current_week_number();
+        let today = Local::now().format("%Y-%m-%d").to_string();
         if let Some(schedule) = &self.schedule {
             if let Some(pos) = schedule.weeks.iter().position(|w| w.week_number >= current_w) {
                 self.selected_week_index = pos;
             } else if !schedule.weeks.is_empty() {
-                self.selected_week_index = schedule.weeks.len() - 1;
+                self.selected_week_index = schedule.weeks.len().saturating_sub(1);
             }
+        }
+        let days = self.get_unique_days();
+        if let Some(day_idx) = days.iter().position(|d| d == &today) {
+            self.selected_day_index = day_idx;
+        } else if let Some(next_day_idx) = days.iter().position(|d| d.as_str() >= today.as_str()) {
+            self.selected_day_index = next_day_idx;
+        } else if !days.is_empty() {
+            self.selected_day_index = days.len() - 1;
         }
         self.selected_event_index = 0;
     }
 
     pub fn jump_to_today(&mut self) {
         let today = Local::now().format("%Y-%m-%d").to_string();
+        let current_w = Self::get_current_week_number();
+
+        // 1. Synkronisera vecka (för Veckovy & framtida vyväxling)
+        let mut today_found_in_week = false;
+        let mut week_event_idx = 0;
         if let Some(schedule) = &self.schedule {
             for (w_idx, w) in schedule.weeks.iter().enumerate() {
                 let events = self.get_filtered_events_for_week(w.week_number, w.year);
                 if let Some(e_idx) = events.iter().position(|e| e.full_date == today) {
                     self.selected_week_index = w_idx;
-                    self.selected_event_index = e_idx;
-                    self.set_status("Hoppade till dagens schema.");
-                    return;
+                    week_event_idx = e_idx;
+                    today_found_in_week = true;
+                    break;
+                }
+            }
+            if !today_found_in_week {
+                if let Some(pos) = schedule.weeks.iter().position(|w| w.week_number >= current_w) {
+                    self.selected_week_index = pos;
+                } else if !schedule.weeks.is_empty() {
+                    self.selected_week_index = schedule.weeks.len().saturating_sub(1);
                 }
             }
         }
-        self.jump_to_current_week();
-        self.set_status("Inga händelser hittades för idag. Visar aktuell vecka.");
+
+        // 2. Synkronisera dag (för Dagvy & framtida vyväxling)
+        let days = self.get_unique_days();
+        let mut today_found_in_days = false;
+        if let Some(day_idx) = days.iter().position(|d| d == &today) {
+            self.selected_day_index = day_idx;
+            today_found_in_days = true;
+        } else if let Some(next_day_idx) = days.iter().position(|d| d.as_str() >= today.as_str()) {
+            self.selected_day_index = next_day_idx;
+        } else if !days.is_empty() {
+            self.selected_day_index = days.len() - 1;
+        }
+
+        // 3. Sätt markering och statusmeddelande baserat på aktiv vy
+        match self.view_mode {
+            ViewMode::Week => {
+                if today_found_in_week {
+                    self.selected_event_index = week_event_idx;
+                    self.set_status("Hoppade till dagens schema.");
+                } else {
+                    self.selected_event_index = 0;
+                    self.set_status("Inga händelser hittades för idag. Visar aktuell vecka.");
+                }
+            }
+            ViewMode::Timeline => {
+                let all_events = self.get_all_filtered_events();
+                let today_pos = all_events.iter().position(|e| e.full_date == today);
+                let next_pos = if today_pos.is_none() {
+                    all_events.iter().position(|e| e.full_date.as_str() >= today.as_str())
+                        .map(|pos| (pos, all_events[pos].full_date.clone()))
+                } else {
+                    None
+                };
+                let has_events = !all_events.is_empty();
+                let last_idx = all_events.len().saturating_sub(1);
+                drop(all_events);
+
+                if let Some(pos) = today_pos {
+                    self.selected_event_index = pos;
+                    self.set_status("Hoppade till dagens schema.");
+                } else if let Some((pos, date_str)) = next_pos {
+                    self.selected_event_index = pos;
+                    self.set_status(format!("Inga händelser idag. Markerade nästa ({})", date_str));
+                } else if has_events {
+                    self.selected_event_index = last_idx;
+                    self.set_status("Inga kommande händelser. Markerade sista händelsen.");
+                } else {
+                    self.selected_event_index = 0;
+                    self.set_status("Inga händelser i schemat.");
+                }
+            }
+            ViewMode::Day => {
+                self.selected_event_index = 0;
+                let target_day = days.get(self.selected_day_index).cloned();
+                if today_found_in_days {
+                    self.set_status("Hoppade till dagens schema.");
+                } else if let Some(target_day) = target_day {
+                    self.set_status(format!("Inga händelser idag. Visar nästa schemalagda dag ({}).", target_day));
+                } else {
+                    self.set_status("Inga schemalagda dagar hittades.");
+                }
+            }
+            ViewMode::Courses => {
+                self.selected_event_index = 0;
+                self.set_status("Hoppade till dagens datum i schemat.");
+            }
+        }
     }
 
     pub fn get_current_week_info(&self) -> Option<&WeekInfo> {
@@ -485,5 +571,148 @@ mod tests {
         assert_eq!(capitalize_group_name("grupp a"), "Grupp A");
         assert_eq!(capitalize_group_name("grupp b"), "Grupp B");
         assert_eq!(capitalize_group_name("pgrp1"), "Pgrp1");
+    }
+
+    fn make_test_event(full_date: &str, week: u32, year: u32, moment: &str) -> Event {
+        Event {
+            week,
+            week_year: year,
+            day: "Mån".to_string(),
+            date: "1 Jan".to_string(),
+            full_date: full_date.to_string(),
+            time_span: "10:00-12:00".to_string(),
+            start_time: "10:00".to_string(),
+            end_time: "12:00".to_string(),
+            duration_display: "2h".to_string(),
+            course: "Testkurs".to_string(),
+            course_code: "TK101".to_string(),
+            signatures: vec![],
+            rooms: vec!["A101".to_string()],
+            aids: "".to_string(),
+            moment: moment.to_string(),
+            activity_type: ActivityType::Lecture,
+            groups: vec![],
+            urls: vec![],
+            updated: "2026-01-01".to_string(),
+        }
+    }
+
+    fn make_test_app() -> App {
+        App {
+            config: AppConfig::default(),
+            _config_path: PathBuf::new(),
+            active_profile_key: "default".to_string(),
+            active_profile: Profile {
+                name: "Test".to_string(),
+                url: "https://example.com".to_string(),
+                group_filter: "alla".to_string(),
+                description: None,
+            },
+            fetcher: ScheduleFetcher::new(60).unwrap(),
+            schedule: None,
+            fetch_info: None,
+            warning_message: None,
+            view_mode: ViewMode::Week,
+            modal: Modal::None,
+            selected_event_index: 0,
+            selected_week_index: 0,
+            selected_day_index: 0,
+            selected_course_index: 0,
+            selected_profile_index: 0,
+            selected_group_index: 0,
+            search_query: String::new(),
+            search_input_buffer: String::new(),
+            selected_groups: BTreeSet::new(),
+            activity_filter: None,
+            status_message: None,
+            should_quit: false,
+        }
+    }
+
+    #[test]
+    fn test_jump_to_today_across_views() {
+        let mut app = make_test_app();
+        let today = Local::now().format("%Y-%m-%d").to_string();
+        let current_w = App::get_current_week_number();
+
+        // 3 events:
+        // ev0: week 1, 2020-01-01 (past)
+        // ev1: week current_w, 2020-01-02 (past)
+        // ev2: week current_w, today (today) -> index 2 globally, but index 1 in week current_w!
+        let ev0 = make_test_event("2020-01-01", 1, 2026, "Föreläsning 1");
+        let ev1 = make_test_event("2020-01-02", current_w, 2026, "Föreläsning 2");
+        let ev2 = make_test_event(&today, current_w, 2026, "Föreläsning 3");
+
+        let schedule = Schedule {
+            metadata: crate::parser::ScheduleMetadata {
+                program_info: "".to_string(),
+                date_range: "".to_string(),
+                printed_at: "".to_string(),
+                ical_url: None,
+            },
+            events: vec![ev0, ev1, ev2],
+            weeks: vec![
+                WeekInfo { week_number: 1, year: 2026, date_span: "".to_string(), event_count: 1 },
+                WeekInfo { week_number: current_w, year: 2026, date_span: "".to_string(), event_count: 2 },
+            ],
+        };
+        app.schedule = Some(schedule);
+
+        // 1. Veckovy: ska välja vecka 1 (andra veckan i listan) och event index 1 (andra eventet i veckan)
+        app.view_mode = ViewMode::Week;
+        app.jump_to_today();
+        assert_eq!(app.selected_week_index, 1);
+        assert_eq!(app.selected_event_index, 1);
+        assert_eq!(app.selected_day_index, 2); // today is the 3rd unique day (index 2)
+
+        // 2. Alla händelser (Timeline): ska välja event index 2 (globalt index i all_events)
+        app.view_mode = ViewMode::Timeline;
+        app.jump_to_today();
+        assert_eq!(app.selected_event_index, 2);
+        assert_eq!(app.selected_week_index, 1);
+        assert_eq!(app.selected_day_index, 2);
+
+        // 3. Dagvy: ska välja selected_day_index = 2 (today) och selected_event_index = 0
+        app.view_mode = ViewMode::Day;
+        app.selected_day_index = 0; // reset to check it changes
+        app.jump_to_today();
+        assert_eq!(app.selected_day_index, 2);
+        assert_eq!(app.selected_event_index, 0);
+    }
+
+    #[test]
+    fn test_jump_to_today_when_no_events_today() {
+        let mut app = make_test_app();
+        let current_w = App::get_current_week_number();
+
+        // All events in future: 2099-10-01, 2099-10-02
+        let ev0 = make_test_event("2099-10-01", current_w + 1, 2099, "Föreläsning 1");
+        let ev1 = make_test_event("2099-10-02", current_w + 1, 2099, "Föreläsning 2");
+
+        let schedule = Schedule {
+            metadata: crate::parser::ScheduleMetadata {
+                program_info: "".to_string(),
+                date_range: "".to_string(),
+                printed_at: "".to_string(),
+                ical_url: None,
+            },
+            events: vec![ev0, ev1],
+            weeks: vec![
+                WeekInfo { week_number: current_w, year: 2026, date_span: "".to_string(), event_count: 0 },
+                WeekInfo { week_number: current_w + 1, year: 2099, date_span: "".to_string(), event_count: 2 },
+            ],
+        };
+        app.schedule = Some(schedule);
+
+        // Timeline: jumps to next upcoming event (index 0)
+        app.view_mode = ViewMode::Timeline;
+        app.jump_to_today();
+        assert_eq!(app.selected_event_index, 0);
+
+        // Day: jumps to next upcoming day (index 0)
+        app.view_mode = ViewMode::Day;
+        app.jump_to_today();
+        assert_eq!(app.selected_day_index, 0);
+        assert_eq!(app.selected_event_index, 0);
     }
 }
